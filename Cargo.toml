@@ -3,3 +3,4 @@ name = "GalaxyEmpire"
 version = "11.4.9"
 [dependencies]
 jpeg-decoder = "0.1"
+rgb = "0.7.2"
