@@ -132,7 +132,6 @@ fn main()
         b = 0;
     }
 
-   //println!();
 
     for i in 0..hi / 8
     {
