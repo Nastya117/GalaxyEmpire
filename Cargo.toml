@@ -4,5 +4,4 @@ version = "11.4.9"
 [dependencies]
 jpeg-decoder = "0.1"
 rgb = "0.7.2"
-rustdct = "0.1.3"
 image = "0.15.0"

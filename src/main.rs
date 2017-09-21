@@ -1,15 +1,11 @@
 
 extern crate jpeg_decoder as jpeg;
 extern crate rgb;
-extern crate rustdct;
 extern crate image;
 
 
 
 
-use rustdct::dct2::{DCT2, DCT2ViaFFT};
-use rustdct::dct3::{DCT3, DCT3ViaFFT};
-use rustdct::rustfft::FFTplanner;
 use rgb::*;
 use std::fs::File;
 use std::io::BufReader;
@@ -53,6 +49,48 @@ impl IndexMut<usize> for Maxik2D
 
 
 
+fn dct(vhod :&mut[f32], vihod :&mut[f32])
+{
+    let mut a1 = 0.0;
+    let mut a2 = 0.0;
+    let mut a3 = 0.0;
+    let mut a4 = 0.0;
+    for i in 0..4
+    {
+        for j in 0..4
+        {
+            a1 += vhod[i * 8 + j];
+            a2 += vhod[i * 8 + (j + 4)];
+            a3 += vhod[(i + 4) * 8 + j];
+            a4 += vhod[(i + 4) * 8 + (j + 4)];
+        }
+    }
+    a1 /= 16.0;
+    a2 /= 16.0;
+    a3 /= 16.0;
+    a4 /= 16.0;
+    vihod[0] = a1;
+    vihod[1] = a2;
+    vihod[2] = a3;
+    vihod[3] = a4;
+}
+
+
+fn tcd(vhod :&mut[f32], vihod :&mut[f32])
+{
+    for i in 0..4
+    {
+        for j in 0..4
+        {
+            vihod[i * 8 + j] += vhod[0];
+            vihod[i * 8 + (j + 4)] = vhod[1];
+            vihod[(i + 4) * 8 + j] = vhod[8];
+            vihod[(i + 4) * 8 + (j + 4)] = vhod[9];
+        }
+    }
+}
+
+
 fn main()
 {
     let file = File::open("hh.jpeg").expect("failed to open file");
@@ -64,7 +102,7 @@ fn main()
     let mut hi = metadata.height as usize;
     let mut wi = metadata.width as usize;
 
-  /*  let mut matr1 = Vec::new();
+    let mut matr1 = Vec::new();
     let mut matg1 = Vec::new();
     let mut matb1 = Vec::new();
     
@@ -77,31 +115,37 @@ fn main()
     {
         if (i % wi < wi - a1)
         {
-            matr1.push(pixels[i].r  as f32);
-            matg1.push(pixels[i].g  as f32);
-            matb1.push(pixels[i].b  as f32);
+            matr1.push(pixels[i].r as f32);
+            matg1.push(pixels[i].g as f32);
+            matb1.push(pixels[i].b as f32);
         }
     }
 
     wi -= a1;
     hi -= a2;
-    let matr = Maxik2D::new(matr1, wi);
-    let matg = Maxik2D::new(matg1, wi);
-    let matb = Maxik2D::new(matb1, wi);
-
-    let mut Resr = Vec::new();
-    let mut Resg = Vec::new();
-    let mut Resb = Vec::new();
 
 
-    let mut planner = FFTplanner::new(false);
-    let fft = planner.plan_fft(64);
 
-    let mut dct = DCT2ViaFFT::new(fft);
-    let fft = planner.plan_fft(64);
+    let mut Resr0 = Vec::new();
+    let mut Resg0 = Vec::new();
+    let mut Resb0 = Vec::new();
+
+    let mut Resr1 = Vec::new();
+    let mut Resg1 = Vec::new();
+    let mut Resb1 = Vec::new();
+
+    let mut Resr2 = Vec::new();
+    let mut Resg2 = Vec::new();
+    let mut Resb2 = Vec::new();
+
+    let mut Resr3 = Vec::new();
+    let mut Resg3 = Vec::new();
+    let mut Resb3 = Vec::new();
+
 
     let mut a = 0;
     let mut b = 0;
+
 
     while a < hi
     {
@@ -117,20 +161,33 @@ fn main()
             {
                 for j in b..b + 8
                 {
-                    vhodr.push(matr[i][j]);
-                    vhodg.push(matg[i][j]);
-                    vhodb.push(matb[i][j]);
+                    vhodr.push(matr1[i * wi + j]);
+                    vhodg.push(matg1[i * wi + j]);
+                    vhodb.push(matb1[i * wi + j]);
                                                             
                 }
             }
 
-            dct.process(&mut vhodr, &mut vihodr);
-            dct.process(&mut vhodg, &mut vihodg);
-            dct.process(&mut vhodb, &mut vihodb);
 
-            Resr.push(vihodr[0]);
-            Resg.push(vihodg[0]);
-            Resb.push(vihodb[0]);
+            dct(&mut vhodr, &mut vihodr);
+            dct(&mut vhodg, &mut vihodg);
+            dct(&mut vhodb, &mut vihodb);
+
+
+            Resr0.push(vihodr[0]);
+            Resr1.push(vihodr[1]);
+            Resr2.push(vihodr[2]);
+            Resr3.push(vihodr[3]);
+
+            Resg0.push(vihodg[0]);
+            Resg1.push(vihodg[1]);
+            Resg2.push(vihodg[2]);
+            Resg3.push(vihodg[3]);
+
+            Resb0.push(vihodb[0]);
+            Resb1.push(vihodb[1]);
+            Resb2.push(vihodb[2]);
+            Resb3.push(vihodb[3]);
 
             b += 8;
         }
@@ -144,17 +201,82 @@ fn main()
 
     let mut i = 0;
     let mut j = 0;
+    let mut k = 0;
+
+
+
+
     while i < hi
     {
         while j < wi
         {
-                ar[i * wi + j] = Resr[j / 8 + i / 8 + i];
-                ag[i * wi + j] = Resg[j / 8 + i / 8 + i];
-                ab[i * wi + j] = Resb[j / 8 + i / 8 + i];
+                ar[i * wi + j] = Resr0[k];
+                ag[i * wi + j] = Resg0[k];
+                ab[i * wi + j] = Resb0[k];
                 j += 8;
+                k += 1;
         }
         i += 8;
         j = 0;
+    }
+
+
+
+    i = 0;
+    j = 1;
+    k = 0;
+    while i < hi
+    {
+        while j < wi
+        {
+                ar[i * wi + j] = Resr1[k];
+                ag[i * wi + j] = Resg1[k];
+                ab[i * wi + j] = Resb1[k];
+                j += 8;
+                k += 1;
+        }
+        i += 8;
+        j = 1;
+    }
+
+
+
+
+
+
+    i = 1;
+    j = 0;
+    k = 0;
+    while i < hi
+    {
+        while j < wi
+        {
+                ar[i * wi + j] = Resr2[k];
+                ag[i * wi + j] = Resg2[k];
+                ab[i * wi + j] = Resb2[k];
+                j += 8;
+                k += 1;
+        }
+        i += 8;
+        j = 0;
+    }
+
+
+    i = 1;
+    j = 1;
+    k = 0;
+    while i < hi
+    {
+        while j < wi
+        {
+                ar[i * wi + j] = Resr3[k];
+                ag[i * wi + j] = Resg3[k];
+                ab[i * wi + j] = Resb3[k];
+                j += 8;
+                k += 1;
+        }
+        i += 8;
+        j = 1;
     }
 
 
@@ -166,8 +288,9 @@ fn main()
     Resg = vec![0u8; wi * hi];
     Resb = vec![0u8; wi * hi];
 
-    let mut dct = DCT3ViaFFT::new(fft);
 
+    a = 0;
+    b = 0;
     while a < hi
     {
         while b < wi
@@ -189,9 +312,16 @@ fn main()
                 }
             }
 
-            dct.process(&mut vhodr, &mut vihodr);
-            dct.process(&mut vhodg, &mut vihodg);
-            dct.process(&mut vhodb, &mut vihodb);
+              
+
+              
+
+
+            tcd(&mut vhodr, &mut vihodr);
+            tcd(&mut vhodg, &mut vihodg);
+            tcd(&mut vhodb, &mut vihodb);
+
+                    //println!("{:?}", vihodr);
 
             for i in a..a + 8
             {
@@ -207,6 +337,7 @@ fn main()
         a += 8;
         b = 0;
     }
+   // println!("{:?}", ar);
 
     let mut Res = Vec::new();
     let mut pixel;
@@ -220,8 +351,8 @@ fn main()
         }
     }
 
-    let Res = Res.as_bytes();*/
-    let Res = pixels.as_bytes();
+    let Res = Res.as_bytes();
+   // println!("{:?}", Res);
 
     let mut fily = File::create("hhout.jpeg").expect("failed to open file");
 
