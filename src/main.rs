@@ -2,6 +2,7 @@
 extern crate jpeg_decoder as jpeg;
 extern crate rgb;
 extern crate image;
+extern crate ocl;
 
 
 
@@ -12,12 +13,28 @@ use std::io::BufReader;
 use std::ops::{Index, IndexMut};
 use image::jpeg::JPEGEncoder;
 use image::ColorType;
+use ocl::ProQue;
 
 
 struct Maxik2D
 {
     V: Vec<f32>,
     wid: usize
+}
+
+struct Resa
+{
+    R: Vec<u8>,
+    G: Vec<u8>,
+    B: Vec<u8>
+}
+
+impl Resa
+{
+    fn new(V1: Vec<u8>, V2: Vec<u8>, V3: Vec<u8>) -> Resa
+    {
+        Resa {R: V1, G: V2, B: V3}
+    }
 }
 
 impl Maxik2D
@@ -49,83 +66,51 @@ impl IndexMut<usize> for Maxik2D
 
 
 
+
+fn C(x: usize) -> f32
+{
+    if x == 0
+    {
+        return 1.0 / 1.4142135623;
+    }
+    else
+    {
+        return 1.0;
+    }
+}
+
+
 fn dct(vhod :&mut[f32], vihod :&mut[f32])
 {
-    let mut a1 = 0.0;
-    let mut a2 = 0.0;
-    let mut a3 = 0.0;
-    let mut a4 = 0.0;
-    for i in 0..4
+    for i in 0..8
     {
-        for j in 0..4
+        for j in 0..8
         {
-            a1 += vhod[i * 8 + j];
-            a2 += vhod[i * 8 + (j + 4)];
-            a3 += vhod[(i + 4) * 8 + j];
-            a4 += vhod[(i + 4) * 8 + (j + 4)];
-        }
-    }
-    a1 /= 16.0;
-    a2 /= 16.0;
-    a3 /= 16.0;
-    a4 /= 16.0;
-    vihod[0] = a1;
-    vihod[1] = a2;
-    vihod[2] = a3;
-    vihod[3] = a4;
-}
-
-
-fn tcd(vhod :&mut[f32], vihod :&mut[f32])
-{
-    for i in 0..4
-    {
-        for j in 0..4
-        {
-            vihod[i * 8 + j] += vhod[0];
-            vihod[i * 8 + (j + 4)] = vhod[1];
-            vihod[(i + 4) * 8 + j] = vhod[8];
-            vihod[(i + 4) * 8 + (j + 4)] = vhod[9];
+            for x in 0..8
+            {
+                for y in 0..8
+                {
+                    let mut c = (2.0 * x as f32 + 1.0) * i as f32 * ::std::f32::consts::PI / 16.0;
+                    let mut cc = (2.0 * y as f32 + 1.0) * j as f32 * ::std::f32::consts::PI / 16.0;
+                    c = c.cos();
+                    cc = cc.cos();
+                    vihod[i * 8 + j] += vhod[x * 8 + y] * c * cc;
+                }
+            }
+            vihod[i * 8 + j] *= C(i) * C(j) / 4.0;
         }
     }
 }
 
 
-fn main()
+
+
+
+
+
+
+fn mani(x: usize, y: usize, wi: usize, hi: usize, matr1: Vec<f32>, matg1: Vec<f32>, matb1: Vec<f32>) -> Resa
 {
-    let file = File::open("hh.jpeg").expect("failed to open file");
-    let mut decoder = jpeg::Decoder::new(BufReader::new(file));
-    let pixels = decoder.decode().expect("failed to decode image");
-    let metadata = decoder.info().unwrap();
-    let pixels = pixels.as_slice().as_rgb();
-
-    let mut hi = metadata.height as usize;
-    let mut wi = metadata.width as usize;
-
-    let mut matr1 = Vec::new();
-    let mut matg1 = Vec::new();
-    let mut matb1 = Vec::new();
-    
-
-    let a1 = wi % 8;
-    let a2 = hi % 8;
-
-
-    for i in 0..(hi - a2) * wi
-    {
-        if (i % wi < wi - a1)
-        {
-            matr1.push(pixels[i].r as f32);
-            matg1.push(pixels[i].g as f32);
-            matb1.push(pixels[i].b as f32);
-        }
-    }
-
-    wi -= a1;
-    hi -= a2;
-
-
-
     let mut Resr0 = Vec::new();
     let mut Resg0 = Vec::new();
     let mut Resb0 = Vec::new();
@@ -146,10 +131,21 @@ fn main()
     let mut a = 0;
     let mut b = 0;
 
-
-    while a < hi
+    let mut xx = 0;
+    let mut yy = 0;
+    if (x != 0) 
     {
-        while b < wi
+        xx = 8;
+    }
+    if (y != 0) 
+    {
+        yy = 8;
+    }
+
+
+    while a < hi - xx
+    {
+        while b < wi - yy
         {
             let mut vihodr = vec![0f32; 64];
             let mut vhodr = Vec::new();
@@ -161,9 +157,9 @@ fn main()
             {
                 for j in b..b + 8
                 {
-                    vhodr.push(matr1[i * wi + j]);
-                    vhodg.push(matg1[i * wi + j]);
-                    vhodb.push(matb1[i * wi + j]);
+                    vhodr.push(matr1[(i + x) * wi + (j + y)]);
+                    vhodg.push(matg1[(i + x) * wi + (j + y)]);
+                    vhodb.push(matb1[(i + x) * wi + (j + y)]);
                                                             
                 }
             }
@@ -206,13 +202,13 @@ fn main()
 
 
 
-    while i < hi
+    while i < hi - xx
     {
-        while j < wi
+        while j < wi - yy
         {
-                ar[i * wi + j] = Resr0[k];
-                ag[i * wi + j] = Resg0[k];
-                ab[i * wi + j] = Resb0[k];
+                ar[(i + x) * wi + (j + y)] = Resr0[k];
+                ag[(i + x) * wi + (j + y)] = Resg0[k];
+                ab[(i + x) * wi + (j + y)] = Resb0[k];
                 j += 8;
                 k += 1;
         }
@@ -225,13 +221,13 @@ fn main()
     i = 0;
     j = 1;
     k = 0;
-    while i < hi
+    while i < hi - xx
     {
-        while j < wi
+        while j < wi - yy
         {
-                ar[i * wi + j] = Resr1[k];
-                ag[i * wi + j] = Resg1[k];
-                ab[i * wi + j] = Resb1[k];
+                ar[(i + x) * wi + (j + y)] = Resr1[k];
+                ag[(i + x) * wi + (j + y)] = Resg1[k];
+                ab[(i + x) * wi + (j + y)] = Resb1[k];
                 j += 8;
                 k += 1;
         }
@@ -247,13 +243,13 @@ fn main()
     i = 1;
     j = 0;
     k = 0;
-    while i < hi
+    while i < hi - xx
     {
-        while j < wi
+        while j < wi - yy
         {
-                ar[i * wi + j] = Resr2[k];
-                ag[i * wi + j] = Resg2[k];
-                ab[i * wi + j] = Resb2[k];
+                ar[(i + x) * wi + (j + y)] = Resr2[k];
+                ag[(i + x) * wi + (j + y)] = Resg2[k];
+                ab[(i + x) * wi + (j + y)] = Resb2[k];
                 j += 8;
                 k += 1;
         }
@@ -265,13 +261,13 @@ fn main()
     i = 1;
     j = 1;
     k = 0;
-    while i < hi
+    while i < hi - xx
     {
-        while j < wi
+        while j < wi - yy
         {
-                ar[i * wi + j] = Resr3[k];
-                ag[i * wi + j] = Resg3[k];
-                ab[i * wi + j] = Resb3[k];
+                ar[(i + x) * wi + (j + y)] = Resr3[k];
+                ag[(i + x) * wi + (j + y)] = Resg3[k];
+                ab[(i + x) * wi + (j + y)] = Resb3[k];
                 j += 8;
                 k += 1;
         }
@@ -291,9 +287,9 @@ fn main()
 
     a = 0;
     b = 0;
-    while a < hi
+    while a < hi - xx
     {
-        while b < wi
+        while b < wi - yy
         {
             let mut vihodr = vec![0f32; 64];
             let mut vhodr = Vec::new();
@@ -305,9 +301,9 @@ fn main()
             {
                 for j in b..b + 8
                 {
-                    vhodr.push(ar[i * wi + j]);
-                    vhodg.push(ag[i * wi + j]);
-                    vhodb.push(ab[i * wi + j]);
+                    vhodr.push(ar[(i + x) * wi + (j + y)]);
+                    vhodg.push(ag[(i + x) * wi + (j + y)]);
+                    vhodb.push(ab[(i + x) * wi + (j + y)]);
                                                             
                 }
             }
@@ -317,9 +313,9 @@ fn main()
               
 
 
-            tcd(&mut vhodr, &mut vihodr);
-            tcd(&mut vhodg, &mut vihodg);
-            tcd(&mut vhodb, &mut vihodb);
+            dct(&mut vhodr, &mut vihodr);
+            dct(&mut vhodg, &mut vihodg);
+            dct(&mut vhodb, &mut vihodb);
 
                     //println!("{:?}", vihodr);
 
@@ -327,9 +323,9 @@ fn main()
             {
                 for j in b..b + 8
                 {
-                    Resr[i * wi + j] = vihodr[(i - a) * 8 + (j - b)] as u8;
-                    Resg[i * wi + j] = vihodg[(i - a) * 8 + (j - b)] as u8;
-                    Resb[i * wi + j] = vihodb[(i - a) * 8 + (j - b)] as u8;                                                       
+                    Resr[(i + x) * wi + (j + y)] = vihodr[(i - a) * 8 + (j - b)] as u8;
+                    Resg[(i + x) * wi + (j + y)] = vihodg[(i - a) * 8 + (j - b)] as u8;
+                    Resb[(i + x) * wi + (j + y)] = vihodb[(i - a) * 8 + (j - b)] as u8;                                                       
                 }
             }
             b += 8;
@@ -337,7 +333,149 @@ fn main()
         a += 8;
         b = 0;
     }
-   // println!("{:?}", ar);
+
+    let mut R = Resa::new(Resr, Resg, Resb);
+
+    return R;
+
+}
+
+
+
+
+
+
+
+
+
+
+
+fn main()
+{
+
+
+
+
+
+
+
+
+/*
+
+
+
+    let src = r#"
+        __kernel void add(__global float* buffer, float scalar) {
+            buffer[get_global_id(0)] += scalar;
+        }
+    "#;
+
+    let pro_que = ProQue::builder().src(src).dims(1 << 20).build().unwrap();
+
+    let buffer = pro_que.create_buffer::<f32>().unwrap();
+
+    let kernel = pro_que.create_kernel("add").unwrap().arg_buf(&buffer).arg_scl(117.0f32);
+
+    kernel.enq().unwrap();
+
+    let mut vec = vec![0.0f32; buffer.len()];
+    buffer.read(&mut vec).enq().unwrap();
+
+    println!("The value at index [{}] is now '{}'!", 200007, vec[200007]);
+
+
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    let file = File::open("oo.jpeg").expect("failed to open file");
+    let mut decoder = jpeg::Decoder::new(BufReader::new(file));
+    let pixels = decoder.decode().expect("failed to decode image");
+    let metadata = decoder.info().unwrap();
+    let pixels = pixels.as_slice().as_rgb();
+
+    let mut hi = metadata.height as usize;
+    let mut wi = metadata.width as usize;
+
+    let mut matr1 = Vec::new();
+    let mut matg1 = Vec::new();
+    let mut matb1 = Vec::new();
+    
+
+    let a1 = wi % 8;
+    let a2 = hi % 8;
+
+
+    for i in 0..(hi - a2) * wi
+    {
+        if (i % wi < wi - a1)
+        {
+            matr1.push(pixels[i].r as f32);
+            matg1.push(pixels[i].g as f32);
+            matb1.push(pixels[i].b as f32);
+        }
+    }
+
+    wi -= a1;
+    hi -= a2;
+
+
+    let mut Resr = Vec::new();
+    Resr = vec![0u8; wi * hi];
+    let mut Resg = Vec::new();
+    Resg = vec![0u8; wi * hi];
+    let mut Resb = Vec::new();
+    Resb = vec![0u8; wi * hi];
+
+
+
+    for i in 0..8
+    {
+        for j in 0..8
+        {
+            let R = mani(i, j, wi, hi, matr1.clone(), matg1.clone(), matb1.clone());
+
+            for ii in 0..wi
+            {
+                for jj in 0..hi
+                {
+                    Resr[ii * wi + jj] += R.R[ii * wi + jj];
+                    Resg[ii * wi + jj] += R.G[ii * wi + jj];
+                    Resb[ii * wi + jj] += R.B[ii * wi + jj];
+                }
+            }
+        }
+    }
+
+
+            for ii in 0..wi
+            {
+                for jj in 0..hi
+                {
+                    Resr[ii * wi + jj] /= 8;
+                    Resg[ii * wi + jj] /= 8;
+                    Resb[ii * wi + jj] /= 8;
+                }
+            }
+
+
 
     let mut Res = Vec::new();
     let mut pixel;
@@ -352,7 +490,6 @@ fn main()
     }
 
     let Res = Res.as_bytes();
-   // println!("{:?}", Res);
 
     let mut fily = File::create("hhout.jpeg").expect("failed to open file");
 
