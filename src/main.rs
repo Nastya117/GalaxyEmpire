@@ -80,7 +80,7 @@ fn C(x: usize) -> f32
 }
 
 
-fn dct(vhod :&mut[f32], vihod :&mut[f32])
+fn dct1(vhod :&mut[f32], vihod :&mut[f32])
 {
     for i in 0..8
     {
@@ -104,6 +104,48 @@ fn dct(vhod :&mut[f32], vihod :&mut[f32])
 
 
 
+
+
+fn dct(vhod :&mut[f32], vihod :&mut[f32])
+{
+    let mut a1 = 0.0;
+    let mut a2 = 0.0;
+    let mut a3 = 0.0;
+    let mut a4 = 0.0;
+    for i in 0..4
+    {
+        for j in 0..4
+        {
+            a1 += vhod[i * 8 + j];
+            a2 += vhod[i * 8 + (j + 4)];
+            a3 += vhod[(i + 4) * 8 + j];
+            a4 += vhod[(i + 4) * 8 + (j + 4)];
+        }
+    }
+    a1 /= 16.0;
+    a2 /= 16.0;
+    a3 /= 16.0;
+    a4 /= 16.0;
+    vihod[0] = a1;
+    vihod[1] = a2;
+    vihod[2] = a3;
+    vihod[3] = a4;
+}
+
+
+fn tcd(vhod :&mut[f32], vihod :&mut[f32])
+{
+    for i in 0..4
+    {
+        for j in 0..4
+        {
+            vihod[i * 8 + j] += vhod[0];
+            vihod[i * 8 + (j + 4)] = vhod[1];
+            vihod[(i + 4) * 8 + j] = vhod[8];
+            vihod[(i + 4) * 8 + (j + 4)] = vhod[9];
+        }
+    }
+}
 
 
 
@@ -313,9 +355,9 @@ fn mani(x: usize, y: usize, wi: usize, hi: usize, matr1: Vec<f32>, matg1: Vec<f3
               
 
 
-            dct(&mut vhodr, &mut vihodr);
-            dct(&mut vhodg, &mut vihodg);
-            dct(&mut vhodb, &mut vihodb);
+            tcd(&mut vhodr, &mut vihodr);
+            tcd(&mut vhodg, &mut vihodg);
+            tcd(&mut vhodb, &mut vihodb);
 
                     //println!("{:?}", vihodr);
 
@@ -438,42 +480,42 @@ fn main()
 
 
     let mut Resr = Vec::new();
-    Resr = vec![0u8; wi * hi];
+    Resr = vec![0u64; wi * hi];
     let mut Resg = Vec::new();
-    Resg = vec![0u8; wi * hi];
+    Resg = vec![0u64; wi * hi];
     let mut Resb = Vec::new();
-    Resb = vec![0u8; wi * hi];
+    Resb = vec![0u64; wi * hi];
 
 
+    println!("PreMani");
 
     for i in 0..8
     {
         for j in 0..8
         {
             let R = mani(i, j, wi, hi, matr1.clone(), matg1.clone(), matb1.clone());
-
-            for ii in 0..wi
+            for ii in 0..hi
             {
-                for jj in 0..hi
+                for jj in 0..wi
                 {
-                    Resr[ii * wi + jj] += R.R[ii * wi + jj];
-                    Resg[ii * wi + jj] += R.G[ii * wi + jj];
-                    Resb[ii * wi + jj] += R.B[ii * wi + jj];
+                    Resr[ii * wi + jj] += R.R[ii * wi + jj] as u64;
+                    Resg[ii * wi + jj] += R.G[ii * wi + jj] as u64;
+                    Resb[ii * wi + jj] += R.B[ii * wi + jj] as u64;
                 }
             }
         }
     }
 
 
-            for ii in 0..wi
-            {
-                for jj in 0..hi
-                {
-                    Resr[ii * wi + jj] /= 8;
-                    Resg[ii * wi + jj] /= 8;
-                    Resb[ii * wi + jj] /= 8;
-                }
-            }
+    for i in 0..hi
+    {
+        for j in 0..wi
+        {
+            Resr[i * wi + j] /= 64;
+            Resg[i * wi + j] /= 64;
+            Resb[i * wi + j] /= 64;
+        }
+    }
 
 
 
@@ -484,7 +526,7 @@ fn main()
     {
         for j in 0..wi
         {
-            pixel = RGB8 {r: Resr[i * wi + j], g: Resg[i * wi + j], b: Resb[i * wi + j]};
+            pixel = RGB8 {r: Resr[i * wi + j] as u8, g: Resg[i * wi + j] as u8, b: Resb[i * wi + j] as u8};
             Res.push(pixel);
         }
     }
