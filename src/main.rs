@@ -80,7 +80,7 @@ fn C(x: usize) -> f32
 }
 
 
-fn dct1(vhod :&mut[f32], vihod :&mut[f32])
+fn dct(vhod :&mut[f32], vihod :&mut[f32])
 {
     for i in 0..8
     {
@@ -102,50 +102,6 @@ fn dct1(vhod :&mut[f32], vihod :&mut[f32])
     }
 }
 
-
-
-
-
-fn dct(vhod :&mut[f32], vihod :&mut[f32])
-{
-    let mut a1 = 0.0;
-    let mut a2 = 0.0;
-    let mut a3 = 0.0;
-    let mut a4 = 0.0;
-    for i in 0..4
-    {
-        for j in 0..4
-        {
-            a1 += vhod[i * 8 + j];
-            a2 += vhod[i * 8 + (j + 4)];
-            a3 += vhod[(i + 4) * 8 + j];
-            a4 += vhod[(i + 4) * 8 + (j + 4)];
-        }
-    }
-    a1 /= 16.0;
-    a2 /= 16.0;
-    a3 /= 16.0;
-    a4 /= 16.0;
-    vihod[0] = a1;
-    vihod[1] = a2;
-    vihod[2] = a3;
-    vihod[3] = a4;
-}
-
-
-fn tcd(vhod :&mut[f32], vihod :&mut[f32])
-{
-    for i in 0..4
-    {
-        for j in 0..4
-        {
-            vihod[i * 8 + j] += vhod[0];
-            vihod[i * 8 + (j + 4)] = vhod[1];
-            vihod[(i + 4) * 8 + j] = vhod[8];
-            vihod[(i + 4) * 8 + (j + 4)] = vhod[9];
-        }
-    }
-}
 
 
 
@@ -355,9 +311,9 @@ fn mani(x: usize, y: usize, wi: usize, hi: usize, matr1: Vec<f32>, matg1: Vec<f3
               
 
 
-            tcd(&mut vhodr, &mut vihodr);
-            tcd(&mut vhodg, &mut vihodg);
-            tcd(&mut vhodb, &mut vihodb);
+            dct(&mut vhodr, &mut vihodr);
+            dct(&mut vhodg, &mut vihodg);
+            dct(&mut vhodb, &mut vihodb);
 
                     //println!("{:?}", vihodr);
 
