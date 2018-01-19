@@ -16,7 +16,7 @@ use image::ColorType;
 use ocl::{util, ProQue, Buffer, MemFlags};
 
 
-struct Maxik2D
+/*struct Maxik2D
 {
     V: Vec<f32>,
     wid: usize
@@ -64,7 +64,7 @@ impl IndexMut<usize> for Maxik2D
     }
 }
 
-
+*/
 
 
 fn C(x: usize) -> f32
@@ -86,6 +86,7 @@ fn dct(vhod :&mut[f32], vihod :&mut[f32])
     {
         for j in 0..8
         {
+            vihod[i * 8 + j] = 0f32;
             for x in 0..8
             {
                 for y in 0..8
@@ -353,7 +354,7 @@ fn main()
 
 
 
-    let file = File::open("hh.jpeg").expect("failed to open file");
+    let file = File::open("oo.jpeg").expect("failed to open file");
     let mut decoder = jpeg::Decoder::new(BufReader::new(file));
     let pixels = decoder.decode().expect("failed to decode image");
     let metadata = decoder.info().unwrap();
@@ -375,9 +376,9 @@ fn main()
     {
         if (i % wi < wi - a1)
         {
-            matr1.push(pixels[i].r as f32);
-            matg1.push(pixels[i].g as f32);
-            matb1.push(pixels[i].b as f32);
+            matr1.push(pixels[i].r);
+            matg1.push(pixels[i].g);
+            matb1.push(pixels[i].b);
         }
     }
 
@@ -396,69 +397,124 @@ fn main()
 
 
 
- /*   let src = r#"
-        __kernel void add(__global float* A, __global float* B, int n, int m, int cx, int cy) 
+let mut i = 0;
+let mut j = 0;
+
+let mut vhodr = Vec::new();
+vhodr = vec![0f32; 8 * 8];
+
+let mut vhodg = Vec::new();
+vhodg = vec![0f32; 8 * 8];
+
+let mut vhodb = Vec::new();
+vhodb = vec![0f32; 8 * 8];
+
+let mut vihodr = Vec::new();
+vihodr = vec![0f32; 8 * 8];
+let mut vihodg = Vec::new();
+vihodg = vec![0f32; 8 * 8];
+let mut vihodb = Vec::new();
+vihodb = vec![0f32; 8 * 8];
+
+
+
+
+
+
+
+
+
+    let src = r#"
+        __kernel void add(__global unsigned char* A, __global float* B, int m) 
         {
-            int xb = get_group_id(0);
-            int yb = get_group_id(1);
-            int kbm = m / 8;
-            int kbn = n / 8;
+            __local float Blo[64];
+            int x = get_local_id(0);
+            int y = get_local_id(1);
             int i = get_global_id(0);
             int j = get_global_id(1);
-            int bn = 8;
-            int bm = 8;
-            int BB = 0;
 
-            if (i + cx + bn < n && j + cy + bm < m)
-            {
-            for (int x = 0; x < bn; ++x)
-                for (int y = 0; y < bm; ++y)
+            Blo[x * 8 + y] = (float)A[i * m + j];
+
+
+
+
+            barrier(CLK_LOCAL_MEM_FENCE);
+
+            float BB = 0;
+
+            for (int xx = 0; xx < 8; ++xx)
+                for (int yy = 0; yy < 8; ++yy)
                 {
-
-                        float c = (2 * (x + cx) + 1) * i * M_PI / 16;
-                        float cc = (2 * (y + cy) + 1) * j * M_PI / 16;
+    
+                        float c = (2 * xx + 1) * x * 3.1415926535 / 16;
+                        float cc = (2 * yy + 1) * y * 3.1415926535 / 16;
                         c = cos(c);
                         cc = cos(cc);
-                        BB += A[(xb * kbm * bm * bn) + ((x + cx) * m) + (xb * bm) + (y + cy)] * c * cc;
+                        BB += Blo[xx * 8 + yy] * c * cc;
 
                 }
-            }
-                    else
-                    BB += 0;
 
-        float Ci, Cj;
-        if (get_local_id(0) - cx == 0)
-            Ci = 1 / 1.4142135623;
+            float Ci, Cj;
+            if (x == 0)
+                Ci = 1 / 1.4142135623;
             else
-            Ci = 1;
+                Ci = 1;
 
-        if (get_local_id(1) - cy == 0)
-            Cj = 1 / 1.4142135623;
+            if (y == 0)
+                Cj = 1 / 1.4142135623;
             else
-            Cj = 1;
-            if (i + cx < n && j + cy < m)
-            {
-                B[(i + cx) * m + j + cy] += Ci * Cj / 4 * BB;
-            }
-
-    }
-
+                Cj = 1;
+            B[i * m + j] = Ci * Cj / 4 * BB;
+        }
     "#;
-*/
+
     
 
-
-
-
-let src = r#"
-        __kernel void add(__global float* A, __global float* B, int n, int m, int cx, int cy)
+    let src1 = r#"
+        __kernel void add1(__global float* A, __global float* B, int m) 
         {
+            __local float Blo[64];
+            int x = get_local_id(0);
+            int y = get_local_id(1);
             int i = get_global_id(0);
             int j = get_global_id(1);
-            B[i * m + j] = get_group_id(1);
-    }
 
+            Blo[x * 8 + y] = A[i * m + j];
+
+
+
+
+            barrier(CLK_LOCAL_MEM_FENCE);
+
+            float BB = 0;
+
+            for (int xx = 0; xx < 8; ++xx)
+                for (int yy = 0; yy < 8; ++yy)
+                {
+    
+                        float c = (2 * xx + 1) * x * 3.1415926535 / 16;
+                        float cc = (2 * yy + 1) * y * 3.1415926535 / 16;
+                        c = cos(c);
+                        cc = cos(cc);
+                        BB += Blo[xx * 8 + yy] * c * cc;
+
+                }
+
+            float Ci, Cj;
+            if (x == 0)
+                Ci = 1 / 1.4142135623;
+            else
+                Ci = 1;
+
+            if (y == 0)
+                Cj = 1 / 1.4142135623;
+            else
+                Cj = 1;
+            B[i * m + j] = Ci * Cj / 4 * BB;
+        }
     "#;
+
+
 
 
 
@@ -468,21 +524,21 @@ let src = r#"
 
    let matr = Buffer::builder()
         .queue(pro_que.queue().clone())
-        .flags(MemFlags::new().read_write().copy_host_ptr())
+        .flags(MemFlags::new().read_only().use_host_ptr())
         .dims((hi, wi))
         .host_data(&matr1)
         .build().unwrap();
 
         let matg = Buffer::builder()
         .queue(pro_que.queue().clone())
-        .flags(MemFlags::new().read_write().copy_host_ptr())
+        .flags(MemFlags::new().read_only().use_host_ptr())
         .dims((hi, wi))
         .host_data(&matg1)
         .build().unwrap();
 
         let matb = Buffer::builder()
         .queue(pro_que.queue().clone())
-        .flags(MemFlags::new().read_write().copy_host_ptr())
+        .flags(MemFlags::new().read_only().use_host_ptr())
         .dims((hi, wi))
         .host_data(&matb1)
         .build().unwrap();
@@ -493,113 +549,16 @@ let src = r#"
     let resb1 = pro_que.create_buffer::<f32>().unwrap();
 
     let mut kernel;
-    
-    for i in 0..8
     {
-        for j in 0..8
-        {
-            kernel = pro_que.create_kernel("add").unwrap().arg_buf(&matr).arg_buf(&resr1).arg_scl(hi).arg_scl(wi).arg_scl(i).arg_scl(j);
-            kernel.lws((1, 1)).enq().unwrap();
-            kernel = pro_que.create_kernel("add").unwrap().arg_buf(&matg).arg_buf(&resg1).arg_scl(hi).arg_scl(wi).arg_scl(i).arg_scl(j);
-            kernel.lws((1, 1)).enq().unwrap();
-            kernel = pro_que.create_kernel("add").unwrap().arg_buf(&matb).arg_buf(&resb1).arg_scl(hi).arg_scl(wi).arg_scl(i).arg_scl(j);
-            kernel.lws((1, 1)).enq().unwrap();
-
-        }
+            let hi = hi as i32;
+            let wi = wi as i32;
+            kernel = pro_que.create_kernel("add").unwrap().arg_buf(&matr).arg_buf(&resr1).arg_scl(wi);
+            kernel.lws((8, 8)).enq().unwrap();
+            kernel = pro_que.create_kernel("add").unwrap().arg_buf(&matg).arg_buf(&resg1).arg_scl(wi);
+            kernel.lws((8, 8)).enq().unwrap();
+            kernel = pro_que.create_kernel("add").unwrap().arg_buf(&matb).arg_buf(&resb1).arg_scl(wi);
+            kernel.lws((8, 8)).enq().unwrap();
     }
-
-
-
-
-
-
-
-
-
-
-
-    /*let src = r#"
-        __kernel void add1(__global float* A, __global float* B, int n, int m, int cx, int cy) 
-        {
-            int xb = get_group_id(0);
-            int yb = get_group_id(1);
-            int kbm = m / 8;
-            int kbn = n / 8;
-            int i = get_global_id(0);
-            int j = get_global_id(1);
-            int bn = 8;
-            int bm = 8;
-            int BB = 0;
-
-            for (int x = 0; x < bn; ++x)
-                for (int y = 0; y < bm; ++y)
-                {
-                    if (i + cx + bn < n && j + cy + bm < m)
-                    {
-                        float c = (2 * (x + cx) + 1) * i * M_PI / 16;
-                        float cc = (2 * (y + cy) + 1) * j * M_PI / 16;
-                        c = cos(c);
-                        cc = cos(cc);
-                        BB += A[(xb * kbm * bm * bn) + ((x + cx) * m) + (xb * bm) + (y + cy)] * c * cc;
-                    }
-                    else
-                    BB += 0;
-                }
-
-        float Ci, Cj;
-        if (get_local_id(0) - cx == 0)
-            Ci = 1 / 1.4142135623;
-            else
-            Ci = 1;
-
-        if (get_local_id(1) - cy == 0)
-            Cj = 1 / 1.4142135623;
-            else
-            Cj = 1;
-            if (i + cx < n && j + cy < m)
-            {
-                B[(i + cx) * m + j + cy] += Ci * Cj / 4 * BB;
-            }
-
-    }
-
-    "#;
-
-    
-
-    let pro_que = ProQue::builder().src(src).dims((8, 8)).build().unwrap();
-
-
-
-    let resrr1 = pro_que.create_buffer::<f32>().unwrap();
-    let resgg1 = pro_que.create_buffer::<f32>().unwrap();
-    let resbb1 = pro_que.create_buffer::<f32>().unwrap();
-
-
-    let mut kernel;
-    
-    for i in 0..8
-    {
-        for j in 0..8
-        {
-            kernel = pro_que.create_kernel("add1").unwrap().arg_buf(&resr1).arg_buf(&resrr1).arg_scl(hi).arg_scl(wi).arg_scl(i).arg_scl(j);
-            kernel.enq().unwrap();
-            kernel = pro_que.create_kernel("add1").unwrap().arg_buf(&resg1).arg_buf(&resgg1).arg_scl(hi).arg_scl(wi).arg_scl(i).arg_scl(j);
-            kernel.enq().unwrap();
-            kernel = pro_que.create_kernel("add1").unwrap().arg_buf(&resb1).arg_buf(&resbb1).arg_scl(hi).arg_scl(wi).arg_scl(i).arg_scl(j);
-            kernel.enq().unwrap();
-        }
-    }
-
-
-*/
-
-
-
-
-
-
-
 
 
 
@@ -613,6 +572,49 @@ let src = r#"
     resg1.read(&mut Resg).enq().unwrap();
     resb1.read(&mut Resb).enq().unwrap();
 
+let pro_que = ProQue::builder().src(src1).dims((hi, wi)).build().unwrap();
+
+
+   let matr11 = Buffer::builder()
+        .queue(pro_que.queue().clone())
+        .flags(MemFlags::new().read_only().use_host_ptr())
+        .dims((hi, wi))
+        .host_data(&Resr)
+        .build().unwrap();
+
+        let matg11 = Buffer::builder()
+        .queue(pro_que.queue().clone())
+        .flags(MemFlags::new().read_only().use_host_ptr())
+        .dims((hi, wi))
+        .host_data(&Resg)
+        .build().unwrap();
+
+        let matb11 = Buffer::builder()
+        .queue(pro_que.queue().clone())
+        .flags(MemFlags::new().read_only().use_host_ptr())
+        .dims((hi, wi))
+        .host_data(&Resb)
+        .build().unwrap();
+
+
+    let resr11 = pro_que.create_buffer::<f32>().unwrap();
+    let resg11 = pro_que.create_buffer::<f32>().unwrap();
+    let resb11 = pro_que.create_buffer::<f32>().unwrap();
+
+    let mut kernel;
+    {
+            let wi = wi as i32;
+            kernel = pro_que.create_kernel("add1").unwrap().arg_buf(&matr11).arg_buf(&resr11).arg_scl(wi);
+            kernel.lws((8, 8)).enq().unwrap();
+            kernel = pro_que.create_kernel("add1").unwrap().arg_buf(&matg11).arg_buf(&resg11).arg_scl(wi);
+            kernel.lws((8, 8)).enq().unwrap();
+            kernel = pro_que.create_kernel("add1").unwrap().arg_buf(&matb11).arg_buf(&resb11).arg_scl(wi);
+            kernel.lws((8, 8)).enq().unwrap();
+    }
+
+    resr11.read(&mut Resr).enq().unwrap();
+    resg11.read(&mut Resg).enq().unwrap();
+    resb11.read(&mut Resb).enq().unwrap();
 
 
 
@@ -634,11 +636,7 @@ let src = r#"
 
 
 
-
-
-
-
-/*
+/* 
 
     let mut Resr = Vec::new();
     Resr = vec![0u64; wi * hi];
