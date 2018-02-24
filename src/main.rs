@@ -464,20 +464,29 @@ vihodb = vec![0f32; 8 * 8];
                 Cj = 1 / 1.4142135623;
             else
                 Cj = 1;
-            B[i * m + j] = Ci * Cj / 4 * BB;
+            if (x < 2 && y < 2)
+                B[i * m + j] = Ci * Cj / 4 * BB;
+            else
+                B[i * m + j] = 0;
         }
     "#;
 
     
 
     let src1 = r#"
-        __kernel void add1(__global float* A, __global float* B, int m) 
+        __kernel void add1(__global float* A, __global float* BBB, __global float* B, int m, int n) 
         {
             __local float Blo[64];
             int x = get_local_id(0);
             int y = get_local_id(1);
             int i = get_global_id(0);
             int j = get_global_id(1);
+            int k = get_global_id(2);
+            i += k / 8;
+            j += k % 8;
+
+            if (i >= n || j >= m) return;
+
 
             Blo[x * 8 + y] = A[i * m + j];
 
@@ -510,7 +519,18 @@ vihodb = vec![0f32; 8 * 8];
                 Cj = 1 / 1.4142135623;
             else
                 Cj = 1;
-            B[i * m + j] = Ci * Cj / 4 * BB;
+            B[k * m * n + i * m + j] = Ci * Cj / 4 * BB;
+
+            barrier(CLK_LOCAL_MEM_FENCE);
+
+            i = get_global_id(0);
+            j = get_global_id(1);
+
+            float summ = 0;
+            for (int ii = 0; ii < 64; ++ii)
+                summ += B[ii * m * n + i * m + j];
+            BBB[i * m + j] = summ / 64;
+            
         }
     "#;
 
@@ -544,9 +564,29 @@ vihodb = vec![0f32; 8 * 8];
         .build().unwrap();
 
 
-    let resr1 = pro_que.create_buffer::<f32>().unwrap();
-    let resg1 = pro_que.create_buffer::<f32>().unwrap();
-    let resb1 = pro_que.create_buffer::<f32>().unwrap();
+        let resr1 = Buffer::builder()
+        .queue(pro_que.queue().clone())
+        .flags(MemFlags::new().read_only().use_host_ptr())
+        .dims((hi, wi))
+        .host_data(&vec![0f32; hi * wi])
+        .build().unwrap();
+
+        let resg1 = Buffer::builder()
+        .queue(pro_que.queue().clone())
+        .flags(MemFlags::new().read_only().use_host_ptr())
+        .dims((hi, wi))
+        .host_data(&vec![0f32; hi * wi])
+        .build().unwrap();
+
+        let resb1 = Buffer::builder()
+        .queue(pro_que.queue().clone())
+        .flags(MemFlags::new().read_only().use_host_ptr())
+        .dims((hi, wi))
+        .host_data(&vec![0f32; hi * wi])
+        .build().unwrap();
+
+        
+
 
     let mut kernel;
     {
@@ -560,7 +600,7 @@ vihodb = vec![0f32; 8 * 8];
             kernel.lws((8, 8)).enq().unwrap();
     }
 
-
+    println!("Закончелъ прямое");
 
 
 
@@ -572,7 +612,7 @@ vihodb = vec![0f32; 8 * 8];
     resg1.read(&mut Resg).enq().unwrap();
     resb1.read(&mut Resb).enq().unwrap();
 
-let pro_que = ProQue::builder().src(src1).dims((hi, wi)).build().unwrap();
+let pro_que = ProQue::builder().src(src1).dims((hi, wi, 64)).build().unwrap();
 
 
    let matr11 = Buffer::builder()
@@ -596,6 +636,27 @@ let pro_que = ProQue::builder().src(src1).dims((hi, wi)).build().unwrap();
         .host_data(&Resb)
         .build().unwrap();
 
+        let bor1 = Buffer::builder()
+        .queue(pro_que.queue().clone())
+        .flags(MemFlags::new().read_write().use_host_ptr())
+        .dims((hi, wi, 64))
+        .host_data(&vec![0f32; hi * wi * 64])
+        .build().unwrap();
+
+        let bog1 = Buffer::builder()
+        .queue(pro_que.queue().clone())
+        .flags(MemFlags::new().read_write().use_host_ptr())
+        .dims((hi, wi, 64))
+        .host_data(&vec![0f32; hi * wi * 64])
+        .build().unwrap();
+
+        let bob1 = Buffer::builder()
+        .queue(pro_que.queue().clone())
+        .flags(MemFlags::new().read_write().use_host_ptr())
+        .dims((hi, wi, 64))
+        .host_data(&vec![0f32; hi * wi * 64])
+        .build().unwrap();
+
 
     let resr11 = pro_que.create_buffer::<f32>().unwrap();
     let resg11 = pro_que.create_buffer::<f32>().unwrap();
@@ -604,11 +665,12 @@ let pro_que = ProQue::builder().src(src1).dims((hi, wi)).build().unwrap();
     let mut kernel;
     {
             let wi = wi as i32;
-            kernel = pro_que.create_kernel("add1").unwrap().arg_buf(&matr11).arg_buf(&resr11).arg_scl(wi);
+            let hi = hi as i32;
+            kernel = pro_que.create_kernel("add1").unwrap().arg_buf(&matr11).arg_buf(&resr11).arg_buf(&bor1).arg_scl(wi).arg_scl(hi);
             kernel.lws((8, 8)).enq().unwrap();
-            kernel = pro_que.create_kernel("add1").unwrap().arg_buf(&matg11).arg_buf(&resg11).arg_scl(wi);
+            kernel = pro_que.create_kernel("add1").unwrap().arg_buf(&matg11).arg_buf(&resg11).arg_buf(&bog1).arg_scl(wi).arg_scl(hi);
             kernel.lws((8, 8)).enq().unwrap();
-            kernel = pro_que.create_kernel("add1").unwrap().arg_buf(&matb11).arg_buf(&resb11).arg_scl(wi);
+            kernel = pro_que.create_kernel("add1").unwrap().arg_buf(&matb11).arg_buf(&resb11).arg_buf(&bob1).arg_scl(wi).arg_scl(hi);
             kernel.lws((8, 8)).enq().unwrap();
     }
 
